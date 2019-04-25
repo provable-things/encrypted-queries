@@ -7,6 +7,7 @@ from cryptography.hazmat.primitives.kdf import x963kdf
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.ciphers import Cipher,algorithms,modes
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 import base64
 import base58
 import codecs
@@ -19,8 +20,7 @@ decode_hex = codecs.getdecoder("hex_codec")
 def hex_to_key(pub_key_hex):
     pub_key_hex = pub_key_hex.strip()
     pub_key_point = decode_hex(pub_key_hex)[0]
-    public_numbers = ec.EllipticCurvePublicNumbers.from_encoded_point(ec.SECP256K1(), pub_key_point)
-    public_key = public_numbers.public_key(backend)
+    public_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), pub_key_point)
     return public_key
 
 def hex_to_priv_key(priv_key_hex, public_key_hex):
@@ -44,7 +44,7 @@ def encrypt(message, receiver_public_key):
     sender_private_key = ec.generate_private_key(ec.SECP256K1(), backend)
     shared_key = sender_private_key.exchange(ec.ECDH(), receiver_public_key)
     sender_public_key = sender_private_key.public_key()
-    point = sender_public_key.public_numbers().encode_point()
+    point = sender_public_key.public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
     iv = '000000000000'.encode()
     xkdf = x963kdf.X963KDF(
         algorithm = hashes.SHA256(),
