@@ -24,7 +24,7 @@ def hex_to_key(pub_key_hex):
     return public_key
 
 def hex_to_priv_key(priv_key_hex, public_key_hex):
-    priv_key_value = long(priv_key_hex, 16)
+    priv_key_value = int(priv_key_hex, 16)
     public_key = hex_to_key(public_key_hex)
     public_numbers = public_key.public_numbers()
     private_numbers = ec.EllipticCurvePrivateNumbers(priv_key_value, public_numbers)
@@ -75,14 +75,14 @@ def decrypt(message, receiver_private_key):
         length = 32,
         sharedinfo = ''.encode(),
         backend = backend
-        )
+    )
     key = xkdf.derive(shared_key)
     decryptor = Cipher(
         algorithms.AES(key),
         modes.GCM(iv,tag),
         backend = backend
-        ).decryptor()
-    message = decryptor.update(ciphertext.encode()) +  decryptor.finalize()
+    ).decryptor()
+    message = decryptor.update(ciphertext) +  decryptor.finalize()
     return message
 
 
@@ -110,10 +110,10 @@ def main():
             pub_key = hex_to_key(args.public_key)
 
         if args.text:
-            print(base64.b64encode(encrypt(args.text, pub_key)))
+            print(base64.b64encode(encrypt(args.text, pub_key)).decode('utf-8'))
             return
         else:
-            print(base64.b64encode(encrypt(sys.stdin.read(), pub_key)))
+            print(base64.b64encode(encrypt(sys.stdin.read(), pub_key)).decode('utf-8'))
             return
     elif args.mode == 'decrypt':
         if args.text:
