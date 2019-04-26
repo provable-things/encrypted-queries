@@ -2,12 +2,11 @@ from __future__ import absolute_import
 import os
 import argparse
 import sys
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.kdf import x963kdf
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.ciphers import Cipher,algorithms,modes
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
 import base64
 import base58
 import codecs
@@ -44,7 +43,10 @@ def encrypt(message, receiver_public_key):
     sender_private_key = ec.generate_private_key(ec.SECP256K1(), backend)
     shared_key = sender_private_key.exchange(ec.ECDH(), receiver_public_key)
     sender_public_key = sender_private_key.public_key()
-    point = sender_public_key.public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+    point = sender_public_key.public_bytes(
+      encoding=serialization.Encoding.X962,
+      format=serialization.PublicFormat.UncompressedPoint
+    )
     iv = '000000000000'.encode()
     xkdf = x963kdf.X963KDF(
         algorithm = hashes.SHA256(),
@@ -66,8 +68,7 @@ def decrypt(message, receiver_private_key):
     point = message[0:65]
     tag = message[65:81]
     ciphertext = message[81:]
-    sender_public_numbers = ec.EllipticCurvePublicNumbers.from_encoded_point(ec.SECP256K1(), point)
-    sender_public_key = sender_public_numbers.public_key(backend)
+    sender_public_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), point)
     shared_key = receiver_private_key.exchange(ec.ECDH(), sender_public_key)
     iv = '000000000000'.encode()
     xkdf = x963kdf.X963KDF(
@@ -138,7 +139,13 @@ def main():
         receiver_private_key = ec.generate_private_key(ec.SECP256K1(), backend)
         receiver_public_key = receiver_private_key.public_key()
         number = receiver_private_key.private_numbers()
-        print("Public Key:", receiver_public_key.public_numbers().encode_point().encode('hex'))
+        print(
+            "Public Key:",
+             receiver_public_key.public_bytes(
+                 encoding=serialization.Encoding.X962,
+                 format=serialization.PublicFormat.UncompressedPoint
+             ).hex()
+        )
         print("Private Key:", hex(number.private_value))
 
 
