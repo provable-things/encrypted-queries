@@ -2,10 +2,10 @@ from __future__ import absolute_import
 import os
 import argparse
 import sys
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.kdf import x963kdf
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.ciphers import Cipher,algorithms,modes
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 import base64
 import base58
@@ -19,12 +19,11 @@ decode_hex = codecs.getdecoder("hex_codec")
 def hex_to_key(pub_key_hex):
     pub_key_hex = pub_key_hex.strip()
     pub_key_point = decode_hex(pub_key_hex)[0]
-    public_numbers = ec.EllipticCurvePublicNumbers.from_encoded_point(ec.SECP256K1(), pub_key_point)
-    public_key = public_numbers.public_key(backend)
+    public_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), pub_key_point)
     return public_key
 
 def hex_to_priv_key(priv_key_hex, public_key_hex):
-    priv_key_value = long(priv_key_hex, 16)
+    priv_key_value = int(priv_key_hex, 16)
     public_key = hex_to_key(public_key_hex)
     public_numbers = public_key.public_numbers()
     private_numbers = ec.EllipticCurvePrivateNumbers(priv_key_value, public_numbers)
@@ -44,7 +43,10 @@ def encrypt(message, receiver_public_key):
     sender_private_key = ec.generate_private_key(ec.SECP256K1(), backend)
     shared_key = sender_private_key.exchange(ec.ECDH(), receiver_public_key)
     sender_public_key = sender_private_key.public_key()
-    point = sender_public_key.public_numbers().encode_point()
+    point = sender_public_key.public_bytes(
+      encoding=serialization.Encoding.X962,
+      format=serialization.PublicFormat.UncompressedPoint
+    )
     iv = '000000000000'.encode()
     xkdf = x963kdf.X963KDF(
         algorithm = hashes.SHA256(),
@@ -66,8 +68,7 @@ def decrypt(message, receiver_private_key):
     point = message[0:65]
     tag = message[65:81]
     ciphertext = message[81:]
-    sender_public_numbers = ec.EllipticCurvePublicNumbers.from_encoded_point(ec.SECP256K1(), point)
-    sender_public_key = sender_public_numbers.public_key(backend)
+    sender_public_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), point)
     shared_key = receiver_private_key.exchange(ec.ECDH(), sender_public_key)
     iv = '000000000000'.encode()
     xkdf = x963kdf.X963KDF(
@@ -75,14 +76,14 @@ def decrypt(message, receiver_private_key):
         length = 32,
         sharedinfo = ''.encode(),
         backend = backend
-        )
+    )
     key = xkdf.derive(shared_key)
     decryptor = Cipher(
         algorithms.AES(key),
         modes.GCM(iv,tag),
         backend = backend
-        ).decryptor()
-    message = decryptor.update(ciphertext.encode()) +  decryptor.finalize()
+    ).decryptor()
+    message = decryptor.update(ciphertext) +  decryptor.finalize()
     return message
 
 
@@ -110,10 +111,10 @@ def main():
             pub_key = hex_to_key(args.public_key)
 
         if args.text:
-            print(base64.b64encode(encrypt(args.text, pub_key)))
+            print(base64.b64encode(encrypt(args.text, pub_key)).decode('utf-8'))
             return
         else:
-            print(base64.b64encode(encrypt(sys.stdin.read(), pub_key)))
+            print(base64.b64encode(encrypt(sys.stdin.read(), pub_key)).decode('utf-8'))
             return
     elif args.mode == 'decrypt':
         if args.text:
@@ -138,7 +139,13 @@ def main():
         receiver_private_key = ec.generate_private_key(ec.SECP256K1(), backend)
         receiver_public_key = receiver_private_key.public_key()
         number = receiver_private_key.private_numbers()
-        print("Public Key:", receiver_public_key.public_numbers().encode_point().encode('hex'))
+        print(
+            "Public Key:",
+             receiver_public_key.public_bytes(
+                 encoding=serialization.Encoding.X962,
+                 format=serialization.PublicFormat.UncompressedPoint
+             ).hex()
+        )
         print("Private Key:", hex(number.private_value))
 
 
